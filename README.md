@@ -15,6 +15,7 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 - Fetch multiple work items
 - Create work items (Task, Bug, User Story, etc.)
 - Update work items (title, state, assignee, and custom fields)
+- Add and remove work item links (Related, Parent, Child, Predecessor, Successor)
 - List repositories in a project
 - Get pull requests for a repository
 - View pull request details and threads
@@ -38,6 +39,13 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
   - Proper error handling for missing project information
 
 ## Changelog
+
+### Version 1.3.0
+
+#### Added
+- Work item link tools: `azure_devops_add_work_item_links`, `azure_devops_remove_work_item_links`
+- Optional `links` array on `azure_devops_create_work_item` and `azure_devops_update_work_item`
+- Supported link types: Related, Parent, Child, Predecessor, Successor (or full `System.LinkTypes.*` references)
 
 ### Version 1.2.0
 
@@ -284,8 +292,10 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_get_projects` | Get all projects | None |
 | `azure_devops_get_work_item` | Get a specific work item | `id` (number) |
 | `azure_devops_get_work_items` | Get multiple work items | `ids` (array of numbers) |
-| `azure_devops_create_work_item` | Create a new work item | `type` (string), `title` (string), optional: `project`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `parentId`, `fields` |
-| `azure_devops_update_work_item` | Update an existing work item | `id` (number), optional: `project`, `title`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `fields` |
+| `azure_devops_create_work_item` | Create a new work item | `type` (string), `title` (string), optional: `project`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `parentId`, `links`, `fields` |
+| `azure_devops_update_work_item` | Update an existing work item | `id` (number), optional: `project`, `title`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `links`, `fields` |
+| `azure_devops_add_work_item_links` | Add links to a work item | `id` (number), `links` (array of `{ targetId, linkType }`), optional: `project` |
+| `azure_devops_remove_work_item_links` | Remove links from a work item | `id` (number), `links` (array of `{ targetId, linkType }`), optional: `project` |
 | `azure_devops_get_repositories` | Get repositories for a project | `project` (string) |
 | `azure_devops_get_pull_requests` | Get pull requests from a repository | `repositoryId` (string), `project` (string) |
 | `azure_devops_get_pull_request` | Get a specific pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
@@ -306,7 +316,9 @@ registerTools(server, azureDevOpsService);
 
 ### Work Item Management
 
-The work item write tools accept friendly field names and map them to Azure DevOps field references internally.
+The work item write tools accept friendly field names and map them to Azure DevOps field references internally. Links use friendly link type names that map to Azure DevOps relation types.
+
+**Supported link types:** `Related`, `Parent`, `Child`, `Predecessor`, `Successor` (or full `System.LinkTypes.*` references).
 
 #### Example Usage:
 
@@ -320,6 +332,18 @@ The work item write tools accept friendly field names and map them to Azure DevO
 }
 ```
 
+**Create a task with multiple Related links:**
+```json
+{
+  "type": "Task",
+  "title": "Linked task",
+  "links": [
+    { "targetId": 100, "linkType": "Related" },
+    { "targetId": 101, "linkType": "Related" }
+  ]
+}
+```
+
 **Create a child task linked to a parent:**
 ```json
 {
@@ -329,7 +353,35 @@ The work item write tools accept friendly field names and map them to Azure DevO
 }
 ```
 
-**Update work item state:**
+**Add links to an existing work item:**
+```json
+{
+  "id": 12346,
+  "links": [
+    { "targetId": 200, "linkType": "Related" },
+    { "targetId": 201, "linkType": "Parent" }
+  ]
+}
+```
+
+**Update work item state and add a Related link:**
+```json
+{
+  "id": 12346,
+  "state": "Active",
+  "links": [{ "targetId": 300, "linkType": "Related" }]
+}
+```
+
+**Remove a Related link:**
+```json
+{
+  "id": 12346,
+  "links": [{ "targetId": 300, "linkType": "Related" }]
+}
+```
+
+**Update work item state only:**
 ```json
 {
   "id": 12346,

@@ -19,7 +19,19 @@ import {
   WorkItemCreateRequest,
   WorkItemUpdateRequest,
   WorkItemJsonPatchOperation,
+  WorkItemLinkInput,
+  WorkItemAddLinksRequest,
+  WorkItemRemoveLinksRequest,
 } from './types.js';
+
+/** Maps friendly link type names to Azure DevOps relation reference names */
+const LINK_TYPE_MAP: Record<string, string> = {
+  Related: 'System.LinkTypes.Related',
+  Parent: 'System.LinkTypes.Hierarchy-Reverse',
+  Child: 'System.LinkTypes.Hierarchy-Forward',
+  Predecessor: 'System.LinkTypes.Dependency-Reverse',
+  Successor: 'System.LinkTypes.Dependency-Forward',
+};
 
 /**
  * Helper function to safely stringify objects with circular references
@@ -136,6 +148,143 @@ class AzureDevOpsService {
   }
 
   /**
+   * Resolve a friendly or full Azure DevOps link type to a relation reference name
+   */
+  private resolveLinkType(linkType: string): string {
+    if (linkType.startsWith('System.LinkTypes.')) {
+      return linkType;
+    }
+
+    const resolved = LINK_TYPE_MAP[linkType];
+    if (!resolved) {
+      throw new Error(
+        `Unknown link type "${linkType}". Supported values: Related, Parent, Child, Predecessor, Successor, or a full System.LinkTypes.* reference.`
+      );
+    }
+
+    return resolved;
+  }
+
+  /**
+   * Build JSON Patch operations to add work item links
+   */
+  private buildWorkItemLinkPatches(links: WorkItemLinkInput[]): WorkItemJsonPatchOperation[] {
+    if (!this.organizationUrl) {
+      throw new Error('Organization URL is not initialized');
+    }
+
+    return links.map(link => ({
+      op: 'add',
+      path: '/relations/-',
+      value: {
+        rel: this.resolveLinkType(link.linkType),
+        url: `${this.organizationUrl}/_apis/wit/workitems/${link.targetId}`,
+      },
+    }));
+  }
+
+  /**
+   * Collect all link inputs including legacy parentId support
+   */
+  private collectWorkItemLinks(params: {
+    parentId?: number;
+    links?: WorkItemLinkInput[];
+  }): WorkItemLinkInput[] {
+    const collected: WorkItemLinkInput[] = [...(params.links ?? [])];
+
+    if (params.parentId !== undefined) {
+      collected.push({ targetId: params.parentId, linkType: 'Parent' });
+    }
+
+    return collected;
+  }
+
+  /**
+   * Extract the target work item ID from a relation URL
+   */
+  private extractWorkItemIdFromRelationUrl(url: string): number | null {
+    const match = url.match(/\/workitems\/(\d+)(?:\?.*)?$/i);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
+  /**
+   * Build JSON Patch operations to remove work item links by target ID and link type
+   */
+  private async buildWorkItemLinkRemovePatches(
+    workItemId: number,
+    links: WorkItemLinkInput[]
+  ): Promise<WorkItemJsonPatchOperation[]> {
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    const workItem = await this.workItemClient.getWorkItem(
+      workItemId,
+      undefined,
+      undefined,
+      4 // WorkItemExpand.Relations
+    );
+
+    if (!workItem?.relations?.length) {
+      throw new Error(`Work item ${workItemId} has no relations to remove`);
+    }
+
+    const indicesToRemove: number[] = [];
+
+    for (const link of links) {
+      const rel = this.resolveLinkType(link.linkType);
+      const index = workItem.relations.findIndex((relation: WorkItemRelation) => {
+        if (relation.rel !== rel) {
+          return false;
+        }
+
+        const targetId = this.extractWorkItemIdFromRelationUrl(relation.url);
+        return targetId === link.targetId;
+      });
+
+      if (index === -1) {
+        throw new Error(
+          `Link not found on work item ${workItemId}: ${link.linkType} -> ${link.targetId}`
+        );
+      }
+
+      indicesToRemove.push(index);
+    }
+
+    return [...new Set(indicesToRemove)]
+      .sort((a, b) => b - a)
+      .map(index => ({
+        op: 'remove' as const,
+        path: `/relations/${index}`,
+      }));
+  }
+
+  /**
+   * Apply a JSON Patch document to an existing work item
+   */
+  private async applyWorkItemPatch(
+    id: number,
+    document: WorkItemJsonPatchOperation[],
+    project?: string
+  ): Promise<WorkItem> {
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    const projectName = project || this.defaultProject;
+
+    const workItem = await this.workItemClient.updateWorkItem(null, document, id, projectName);
+
+    if (!workItem) {
+      throw new Error(
+        `Azure DevOps returned no work item for ID ${id}. Verify the ID, field values, and PAT permissions (Work Items read & write).`
+      );
+    }
+
+    return workItem;
+  }
+
+  /**
    * Build a JSON Patch document from friendly work item field parameters
    */
   private buildWorkItemPatchDocument(
@@ -148,6 +297,7 @@ class AzureDevOpsService {
       iterationPath?: string;
       tags?: string;
       parentId?: number;
+      links?: WorkItemLinkInput[];
       fields?: Record<string, unknown>;
     },
     operation: 'add' | 'replace'
@@ -186,19 +336,11 @@ class AzureDevOpsService {
       }
     }
 
-    if (operation === 'add' && params.parentId !== undefined) {
-      if (!this.organizationUrl) {
-        throw new Error('Organization URL is not initialized');
+    if (operation === 'add') {
+      const links = this.collectWorkItemLinks(params);
+      if (links.length > 0) {
+        document.push(...this.buildWorkItemLinkPatches(links));
       }
-
-      document.push({
-        op: 'add',
-        path: '/relations/-',
-        value: {
-          rel: 'System.LinkTypes.Hierarchy-Reverse',
-          url: `${this.organizationUrl}/_apis/wit/workitems/${params.parentId}`,
-        },
-      });
     }
 
     return document;
@@ -258,31 +400,63 @@ class AzureDevOpsService {
     }
 
     const projectName = params.project || this.defaultProject;
-    const document = this.buildWorkItemPatchDocument(params, 'replace');
+    const document = [
+      ...this.buildWorkItemPatchDocument(params, 'replace'),
+      ...(params.links?.length ? this.buildWorkItemLinkPatches(params.links) : []),
+    ];
 
     if (document.length === 0) {
-      throw new Error('At least one field must be provided to update a work item');
+      throw new Error('At least one field or link must be provided to update a work item');
     }
 
     try {
-      const workItem = await this.workItemClient.updateWorkItem(
-        null,
-        document,
-        params.id,
-        projectName
-      );
-
-      if (!workItem) {
-        throw new Error(
-          `Azure DevOps returned no work item for ID ${params.id}. Verify the ID, field values, and PAT permissions (Work Items read & write).`
-        );
-      }
-
-      return workItem;
+      return await this.applyWorkItemPatch(params.id, document, projectName);
     } catch (error) {
       console.error(`Error updating work item ${params.id}:`, error);
       throw new Error(
         `Failed to update work item: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Add links to an existing work item
+   */
+  async addWorkItemLinks(params: WorkItemAddLinksRequest): Promise<WorkItem> {
+    await this.initialize();
+
+    if (!params.links?.length) {
+      throw new Error('At least one link must be provided');
+    }
+
+    try {
+      const document = this.buildWorkItemLinkPatches(params.links);
+      return await this.applyWorkItemPatch(params.id, document, params.project);
+    } catch (error) {
+      console.error(`Error adding links to work item ${params.id}:`, error);
+      throw new Error(
+        `Failed to add work item links: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Remove links from an existing work item
+   */
+  async removeWorkItemLinks(params: WorkItemRemoveLinksRequest): Promise<WorkItem> {
+    await this.initialize();
+
+    if (!params.links?.length) {
+      throw new Error('At least one link must be provided');
+    }
+
+    try {
+      const document = await this.buildWorkItemLinkRemovePatches(params.id, params.links);
+      return await this.applyWorkItemPatch(params.id, document, params.project);
+    } catch (error) {
+      console.error(`Error removing links from work item ${params.id}:`, error);
+      throw new Error(
+        `Failed to remove work item links: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

@@ -282,9 +282,23 @@ const workItemFieldsSchema = {
     .describe('Additional custom fields using full Azure DevOps field reference names'),
 };
 
+const workItemLinkSchema = z.object({
+  targetId: z.number().describe('Target work item ID to link to'),
+  linkType: z
+    .string()
+    .describe(
+      'Link type: Related, Parent, Child, Predecessor, Successor, or full System.LinkTypes.* reference'
+    ),
+});
+
+const workItemLinksSchema = z
+  .array(workItemLinkSchema)
+  .optional()
+  .describe('Work item links to create or add');
+
 server.tool(
   'azure_devops_create_work_item',
-  'Create a new work item in Azure DevOps. Supports common fields, custom fields, and optional parent linking.',
+  'Create a new work item in Azure DevOps. Supports common fields, custom fields, optional parent linking, and multiple links.',
   {
     type: z
       .string()
@@ -301,6 +315,7 @@ server.tool(
     iterationPath: workItemFieldsSchema.iterationPath,
     tags: workItemFieldsSchema.tags,
     parentId: z.number().optional().describe('Optional parent work item ID to link as a child'),
+    links: workItemLinksSchema,
     fields: workItemFieldsSchema.fields,
   },
   async params => {
@@ -325,7 +340,7 @@ server.tool(
 
 server.tool(
   'azure_devops_update_work_item',
-  'Update an existing work item in Azure DevOps. Only provided fields are changed.',
+  'Update an existing work item in Azure DevOps. Only provided fields are changed; optional links are added.',
   {
     id: z.number().describe('The ID of the work item to update'),
     project: z
@@ -339,11 +354,80 @@ server.tool(
     areaPath: workItemFieldsSchema.areaPath,
     iterationPath: workItemFieldsSchema.iterationPath,
     tags: workItemFieldsSchema.tags,
+    links: workItemLinksSchema,
     fields: workItemFieldsSchema.fields,
   },
   async params => {
     try {
       const result = await azureDevOpsService.updateWorkItem(params);
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+  }
+);
+
+server.tool(
+  'azure_devops_add_work_item_links',
+  'Add one or more links to an existing work item. Supports Related, Parent, Child, Predecessor, and Successor link types.',
+  {
+    id: z.number().describe('The ID of the source work item'),
+    project: z
+      .string()
+      .optional()
+      .describe('Project name. Optional but recommended for ADO routing.'),
+    links: z
+      .array(workItemLinkSchema)
+      .min(1)
+      .describe('Links to add, each with targetId and linkType'),
+  },
+  async params => {
+    try {
+      const result = await azureDevOpsService.addWorkItemLinks(params);
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+  }
+);
+
+server.tool(
+  'azure_devops_remove_work_item_links',
+  'Remove one or more links from an existing work item by target ID and link type.',
+  {
+    id: z.number().describe('The ID of the source work item'),
+    project: z
+      .string()
+      .optional()
+      .describe('Project name. Optional but recommended for ADO routing.'),
+    links: z
+      .array(workItemLinkSchema)
+      .min(1)
+      .describe('Links to remove, each with targetId and linkType'),
+  },
+  async params => {
+    try {
+      const result = await azureDevOpsService.removeWorkItemLinks(params);
       return {
         content: [{ type: 'text', text: safeResponse(result) }],
       };
@@ -1060,6 +1144,8 @@ async function main() {
     console.error('- azure_devops_get_work_items: Get multiple work items by IDs');
     console.error('- azure_devops_create_work_item: Create a new work item');
     console.error('- azure_devops_update_work_item: Update an existing work item');
+    console.error('- azure_devops_add_work_item_links: Add links to a work item');
+    console.error('- azure_devops_remove_work_item_links: Remove links from a work item');
     console.error('- azure_devops_get_repositories: List all repositories');
     console.error('- azure_devops_get_pull_requests: List all pull requests for a repository');
     console.error('- azure_devops_get_pull_request: Get a pull request by ID');

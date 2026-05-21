@@ -141,6 +141,17 @@ app.get('/sse', async (req, res) => {
         iterationPath: z.string().optional().describe('Iteration path'),
         tags: z.string().optional().describe('Semicolon-separated tags'),
         parentId: z.number().optional().describe('Parent work item ID'),
+        links: z
+          .array(
+            z.object({
+              targetId: z.number().describe('Target work item ID'),
+              linkType: z
+                .string()
+                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
+            })
+          )
+          .optional()
+          .describe('Work item links to create'),
         fields: z.record(z.unknown()).optional().describe('Additional custom fields'),
       },
       async params => {
@@ -176,11 +187,98 @@ app.get('/sse', async (req, res) => {
         areaPath: z.string().optional().describe('Area path'),
         iterationPath: z.string().optional().describe('Iteration path'),
         tags: z.string().optional().describe('Semicolon-separated tags'),
+        links: z
+          .array(
+            z.object({
+              targetId: z.number().describe('Target work item ID'),
+              linkType: z
+                .string()
+                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
+            })
+          )
+          .optional()
+          .describe('Work item links to add'),
         fields: z.record(z.unknown()).optional().describe('Additional custom fields'),
       },
       async params => {
         try {
           const result = await azureDevOpsService.updateWorkItem(params);
+          return {
+            content: [{ type: 'text', text: safeResponse(result) }],
+          };
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    server.tool(
+      'azure_devops_add_work_item_links',
+      'Add links to an existing work item',
+      {
+        id: z.number().describe('Source work item ID'),
+        project: z.string().optional().describe('Project name'),
+        links: z
+          .array(
+            z.object({
+              targetId: z.number().describe('Target work item ID'),
+              linkType: z
+                .string()
+                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
+            })
+          )
+          .min(1)
+          .describe('Links to add'),
+      },
+      async params => {
+        try {
+          const result = await azureDevOpsService.addWorkItemLinks(params);
+          return {
+            content: [{ type: 'text', text: safeResponse(result) }],
+          };
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    server.tool(
+      'azure_devops_remove_work_item_links',
+      'Remove links from an existing work item',
+      {
+        id: z.number().describe('Source work item ID'),
+        project: z.string().optional().describe('Project name'),
+        links: z
+          .array(
+            z.object({
+              targetId: z.number().describe('Target work item ID'),
+              linkType: z
+                .string()
+                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
+            })
+          )
+          .min(1)
+          .describe('Links to remove'),
+      },
+      async params => {
+        try {
+          const result = await azureDevOpsService.removeWorkItemLinks(params);
           return {
             content: [{ type: 'text', text: safeResponse(result) }],
           };

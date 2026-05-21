@@ -241,6 +241,26 @@ export interface WorkItemJsonPatchOperation {
   value?: unknown;
 }
 
+/** Input for linking work items */
+export interface WorkItemLinkInput {
+  targetId: number;
+  linkType: string;
+}
+
+/** Request payload for adding links to a work item */
+export interface WorkItemAddLinksRequest {
+  id: number;
+  project?: string;
+  links: WorkItemLinkInput[];
+}
+
+/** Request payload for removing links from a work item */
+export interface WorkItemRemoveLinksRequest {
+  id: number;
+  project?: string;
+  links: WorkItemLinkInput[];
+}
+
 /** Request payload for creating a work item */
 export interface WorkItemCreateRequest {
   project?: string;
@@ -253,6 +273,7 @@ export interface WorkItemCreateRequest {
   iterationPath?: string;
   tags?: string;
   parentId?: number;
+  links?: WorkItemLinkInput[];
   fields?: Record<string, unknown>;
 }
 
@@ -267,5 +288,6 @@ export interface WorkItemUpdateRequest {
   areaPath?: string;
   iterationPath?: string;
   tags?: string;
+  links?: WorkItemLinkInput[];
   fields?: Record<string, unknown>;
 }
