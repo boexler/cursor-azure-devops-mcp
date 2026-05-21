@@ -189,7 +189,7 @@ const server = new McpServer({
 
 // Register Azure DevOps tools
 server.tool(
-  'azure_devops_projects',
+  'azure_devops_get_projects',
   'List all Azure DevOps projects in your organization. Returns project details including ID, name, description, visibility, and state. Results are automatically truncated if they exceed size limits.',
   {},
   async () => {
@@ -213,7 +213,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_work_item',
+  'azure_devops_get_work_item',
   'Get detailed information about a specific work item by ID. Returns work item fields, relations, history, and metadata. Supports all work item types (bugs, tasks, user stories, etc).',
   {
     id: z.number().describe('The ID of the work item to retrieve'),
@@ -239,7 +239,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_work_items',
+  'azure_devops_get_work_items',
   'Get detailed information for multiple work items by their IDs. Returns complete work item data including fields, relations, history, and metadata for each item. Useful for bulk retrieval of work items. Response is automatically truncated if it exceeds size limits while preserving essential data.',
   {
     ids: z
@@ -362,7 +362,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_repositories',
+  'azure_devops_get_repositories',
   'List all Git repositories in an Azure DevOps project. Returns repository details including ID, name, project info, default branch, size, and URLs. Supports both project-specific and organization-wide repository listing. Results are automatically truncated if they exceed size limits.',
   {
     project: z
@@ -393,7 +393,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_pull_requests',
+  'azure_devops_get_pull_requests',
   'List all pull requests in a repository. Returns comprehensive PR information including title, description, status, reviewers, work items, commits, and thread counts. Supports filtering and pagination. Results are automatically truncated if they exceed size limits.',
   {
     repositoryId: z
@@ -427,7 +427,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_pull_request_by_id',
+  'azure_devops_get_pull_request',
   'Get detailed information about a specific pull request. Returns complete PR data including title, description, status, reviewers, work items, commits, policy evaluations, and merge status. Useful for getting the full context of a PR. Response includes all associated metadata.',
   {
     repositoryId: z
@@ -470,7 +470,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_pull_request_threads',
+  'azure_devops_get_pull_request_threads',
   'Get all comment threads in a pull request. Returns thread details including comments, status, relationships, and file annotations. Supports both file-specific and general comments. Results include thread context and metadata.',
   {
     repositoryId: z
@@ -511,7 +511,7 @@ server.tool(
 
 // New tool for work item attachments
 server.tool(
-  'azure_devops_work_item_attachments',
+  'azure_devops_get_work_item_attachments',
   'Get all attachments associated with a work item. Returns attachment details including file name, size, creator, timestamps, and download URLs. Supports all attachment types including images, documents, and binary files. Results include metadata for each attachment.',
   {
     id: z
@@ -540,7 +540,7 @@ server.tool(
 
 // New tool for work item links
 server.tool(
-  'azure_devops_work_item_links',
+  'azure_devops_get_work_item_links',
   'Get all links and relationships for a work item. Returns detailed link information including link types, target work items, and relationship attributes. Supports all link types (Parent/Child, Related, Predecessor/Successor, etc). Results include full context of work item relationships.',
   {
     id: z
@@ -569,7 +569,7 @@ server.tool(
 
 // New tool for linked work items with full details
 server.tool(
-  'azure_devops_linked_work_items',
+  'azure_devops_get_linked_work_items',
   'Get all linked work items with their full details',
   {
     id: z.number().describe('Work item ID'),
@@ -589,7 +589,7 @@ server.tool(
 
 // New tool for pull request changes with file contents
 server.tool(
-  'azure_devops_pull_request_changes',
+  'azure_devops_get_pull_request_changes',
   'Get detailed code changes for a pull request',
   {
     repositoryId: z.string().describe('Repository ID'),
@@ -616,7 +616,7 @@ server.tool(
 
 // New tool for getting content of large files in pull requests by chunks
 server.tool(
-  'azure_devops_pull_request_file_content',
+  'azure_devops_get_pull_request_file_content',
   'Get the content of a specific file in a pull request. By default returns the complete file as plain text. Set returnPlainText=false to get content in chunks with metadata. Has a 5-minute timeout for large files.',
   {
     repositoryId: z.string().describe('Repository ID'),
@@ -713,7 +713,7 @@ server.tool(
 
 // New tool for getting file content directly from a branch
 server.tool(
-  'azure_devops_branch_file_content',
+  'azure_devops_get_branch_file_content',
   'Get the content of a file directly from a branch. By default returns the complete file as plain text. Set returnPlainText=false to get content in chunks with metadata. Has a 5-minute timeout for large files.',
   {
     repositoryId: z.string().describe('Repository ID'),
@@ -826,7 +826,7 @@ server.tool(
 
 // New tool for work item comments
 server.tool(
-  'azure_devops_work_item_comments',
+  'azure_devops_get_work_item_comments',
   'Get comments for a specific work item',
   {
     id: z.number().describe('Work item ID'),
@@ -843,7 +843,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      console.error(`Error executing azure_devops_work_item_comments for ID ${id}:`, error);
+      console.error(`Error executing azure_devops_get_work_item_comments for ID ${id}:`, error);
       return {
         content: [
           {
@@ -858,7 +858,7 @@ server.tool(
 
 // Test Plans
 server.tool(
-  'azure_devops_test_plans',
+  'azure_devops_get_test_plans',
   'List all test plans in a project. Returns test plan details including ID, name, area path, and iteration path. Results are automatically truncated if they exceed size limits while preserving essential metadata.',
   {
     project: z
@@ -889,7 +889,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_test_plan',
+  'azure_devops_get_test_plan',
   'Get a test plan by ID',
   {
     project: z.string().describe('Project name'),
@@ -907,7 +907,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      console.error('Error executing azure_devops_test_plan:', error);
+      console.error('Error executing azure_devops_get_test_plan:', error);
       return {
         content: [
           {
@@ -922,7 +922,7 @@ server.tool(
 
 // Test Suites
 server.tool(
-  'azure_devops_test_suites',
+  'azure_devops_get_test_suites',
   'List all test suites for a test plan',
   {
     project: z.string().describe('Project name'),
@@ -940,7 +940,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      console.error('Error executing azure_devops_test_suites:', error);
+      console.error('Error executing azure_devops_get_test_suites:', error);
       return {
         content: [
           {
@@ -954,7 +954,7 @@ server.tool(
 );
 
 server.tool(
-  'azure_devops_test_suite',
+  'azure_devops_get_test_suite',
   'Get detailed information about a specific test suite by ID. Returns suite details, test cases, configurations, and related information. Supports all test suite types (static, requirement-based, query-based).',
   {
     project: z
@@ -988,7 +988,7 @@ server.tool(
 
 // Test Cases
 server.tool(
-  'azure_devops_test_cases',
+  'azure_devops_get_test_cases',
   'List all test cases for a test suite',
   {
     project: z.string().describe('Project name'),
@@ -1007,7 +1007,7 @@ server.tool(
         ],
       };
     } catch (error) {
-      console.error('Error executing azure_devops_test_cases:', error);
+      console.error('Error executing azure_devops_get_test_cases:', error);
       return {
         content: [
           {
@@ -1055,36 +1055,38 @@ async function main() {
 
     console.error('Azure DevOps MCP Server running on stdio');
     console.error('Available tools:');
-    console.error('- azure_devops_projects: List all projects');
-    console.error('- azure_devops_work_item: Get a work item by ID');
-    console.error('- azure_devops_work_items: Get multiple work items by IDs');
+    console.error('- azure_devops_get_projects: List all projects');
+    console.error('- azure_devops_get_work_item: Get a work item by ID');
+    console.error('- azure_devops_get_work_items: Get multiple work items by IDs');
     console.error('- azure_devops_create_work_item: Create a new work item');
     console.error('- azure_devops_update_work_item: Update an existing work item');
-    console.error('- azure_devops_repositories: List all repositories');
-    console.error('- azure_devops_pull_requests: List all pull requests for a repository');
-    console.error('- azure_devops_pull_request_by_id: Get a pull request by ID');
-    console.error('- azure_devops_pull_request_threads: Get threads (comments) for a pull request');
-    console.error('- azure_devops_work_item_attachments: Get attachments for a work item');
-    console.error('- azure_devops_work_item_links: Get links for a work item');
+    console.error('- azure_devops_get_repositories: List all repositories');
+    console.error('- azure_devops_get_pull_requests: List all pull requests for a repository');
+    console.error('- azure_devops_get_pull_request: Get a pull request by ID');
     console.error(
-      '- azure_devops_linked_work_items: Get all linked work items with their full details'
+      '- azure_devops_get_pull_request_threads: Get threads (comments) for a pull request'
+    );
+    console.error('- azure_devops_get_work_item_attachments: Get attachments for a work item');
+    console.error('- azure_devops_get_work_item_links: Get links for a work item');
+    console.error(
+      '- azure_devops_get_linked_work_items: Get all linked work items with their full details'
     );
     console.error(
-      '- azure_devops_pull_request_changes: Get detailed code changes for a pull request'
+      '- azure_devops_get_pull_request_changes: Get detailed code changes for a pull request'
     );
     console.error(
-      '- azure_devops_pull_request_file_content: Get content of a specific file in chunks (for large files)'
+      '- azure_devops_get_pull_request_file_content: Get content of a specific file in chunks (for large files)'
     );
     console.error(
-      '- azure_devops_branch_file_content: Get content of a file directly from a branch'
+      '- azure_devops_get_branch_file_content: Get content of a file directly from a branch'
     );
     console.error('- azure_devops_create_pr_comment: Create a comment on a pull request');
-    console.error('- azure_devops_work_item_comments: Get comments for a specific work item');
-    console.error('- azure_devops_test_plans: List all test plans for a project');
-    console.error('- azure_devops_test_plan: Get a test plan by ID');
-    console.error('- azure_devops_test_suites: List all test suites for a test plan');
-    console.error('- azure_devops_test_suite: Get a test suite by ID');
-    console.error('- azure_devops_test_cases: List all test cases for a test suite');
+    console.error('- azure_devops_get_work_item_comments: Get comments for a specific work item');
+    console.error('- azure_devops_get_test_plans: List all test plans for a project');
+    console.error('- azure_devops_get_test_plan: Get a test plan by ID');
+    console.error('- azure_devops_get_test_suites: List all test suites for a test plan');
+    console.error('- azure_devops_get_test_suite: Get a test suite by ID');
+    console.error('- azure_devops_get_test_cases: List all test cases for a test suite');
   } catch (error) {
     console.error('Error starting server:', error);
     process.exit(1);

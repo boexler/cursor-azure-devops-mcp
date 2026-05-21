@@ -39,6 +39,15 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 
 ## Changelog
 
+### Version 1.2.0
+
+#### Added
+- Work item write tools: `azure_devops_create_work_item`, `azure_devops_update_work_item`
+
+#### Changed (Breaking)
+- Renamed all read/list MCP tools to use the `azure_devops_get_*` prefix for consistency with create/update tools
+- `azure_devops_pull_request_by_id` renamed to `azure_devops_get_pull_request`
+
 ### Version 1.0.3
 
 #### Added
@@ -272,26 +281,26 @@ registerTools(server, azureDevOpsService);
 
 | Tool Name | Description | Required Parameters |
 |-----------|-------------|-------------------|
-| `azure_devops_projects` | Get all projects | None |
-| `azure_devops_work_item` | Get a specific work item | `id` (number) |
-| `azure_devops_work_items` | Get multiple work items | `ids` (array of numbers) |
+| `azure_devops_get_projects` | Get all projects | None |
+| `azure_devops_get_work_item` | Get a specific work item | `id` (number) |
+| `azure_devops_get_work_items` | Get multiple work items | `ids` (array of numbers) |
 | `azure_devops_create_work_item` | Create a new work item | `type` (string), `title` (string), optional: `project`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `parentId`, `fields` |
 | `azure_devops_update_work_item` | Update an existing work item | `id` (number), optional: `project`, `title`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `fields` |
-| `azure_devops_repositories` | Get repositories for a project | `project` (string) |
-| `azure_devops_pull_requests` | Get pull requests from a repository | `repositoryId` (string), `project` (string) |
-| `azure_devops_pull_request_by_id` | Get a specific pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
-| `azure_devops_pull_request_threads` | Get threads from a pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
-| `azure_devops_work_item_attachments` | Get attachments for a work item | `id` (number) |
-| `azure_devops_work_item_comments` | Get comments for a work item | `id` (number) |
-| `azure_devops_pull_request_changes` | Get detailed PR code changes | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
-| `azure_devops_pull_request_file_content` | Get content of a specific file in a pull request | `repositoryId` (string), `pullRequestId` (number), `filePath` (string), `objectId` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
-| `azure_devops_branch_file_content` | Get file content directly from a branch | `repositoryId` (string), `branchName` (string), `filePath` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
+| `azure_devops_get_repositories` | Get repositories for a project | `project` (string) |
+| `azure_devops_get_pull_requests` | Get pull requests from a repository | `repositoryId` (string), `project` (string) |
+| `azure_devops_get_pull_request` | Get a specific pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| `azure_devops_get_pull_request_threads` | Get threads from a pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| `azure_devops_get_work_item_attachments` | Get attachments for a work item | `id` (number) |
+| `azure_devops_get_work_item_comments` | Get comments for a work item | `id` (number) |
+| `azure_devops_get_pull_request_changes` | Get detailed PR code changes | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
+| `azure_devops_get_pull_request_file_content` | Get content of a specific file in a pull request | `repositoryId` (string), `pullRequestId` (number), `filePath` (string), `objectId` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
+| `azure_devops_get_branch_file_content` | Get file content directly from a branch | `repositoryId` (string), `branchName` (string), `filePath` (string), `project` (string), optional: `returnPlainText` (boolean), `startPosition` (number), `length` (number) |
 | `azure_devops_create_pr_comment` | Create a comment on a pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string), `content` (string), and other optional parameters |
-| `azure_devops_test_plans` | List all test plans for a project | `project` (string) |
-| `azure_devops_test_plan` | Get a test plan by ID | `project` (string), `testPlanId` (number) |
-| `azure_devops_test_suites` | List all test suites for a test plan | `project` (string), `testPlanId` (number) |
-| `azure_devops_test_suite` | Get a test suite by ID | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
-| `azure_devops_test_cases` | List all test cases for a test suite | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
+| `azure_devops_get_test_plans` | List all test plans for a project | `project` (string) |
+| `azure_devops_get_test_plan` | Get a test plan by ID | `project` (string), `testPlanId` (number) |
+| `azure_devops_get_test_suites` | List all test suites for a test plan | `project` (string), `testPlanId` (number) |
+| `azure_devops_get_test_suite` | Get a test suite by ID | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
+| `azure_devops_get_test_cases` | List all test cases for a test suite | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
 
 > **Note:** Creating and updating work items requires a Personal Access Token with **Work Items (read & write)** scope.
 
@@ -366,9 +375,9 @@ The test management tools provide comprehensive access to Azure DevOps test plan
 
 When working with test management tools, you should:
 
-1. First retrieve the test plans for your project using `azure_devops_test_plans`
-2. Use a specific test plan ID to get test suites with `azure_devops_test_suites`
-3. Finally, get test cases for a specific suite using `azure_devops_test_cases`
+1. First retrieve the test plans for your project using `azure_devops_get_test_plans`
+2. Use a specific test plan ID to get test suites with `azure_devops_get_test_suites`
+3. Finally, get test cases for a specific suite using `azure_devops_get_test_cases`
 
 The response format includes truncation metadata when necessary:
 ```json

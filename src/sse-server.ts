@@ -77,7 +77,7 @@ app.get('/sse', async (req, res) => {
     });
 
     // Register Azure DevOps tools
-    server.tool('azure_devops_projects', 'Get projects from Azure DevOps', {}, async () => {
+    server.tool('azure_devops_get_projects', 'Get projects from Azure DevOps', {}, async () => {
       const result = await azureDevOpsService.getProjects();
       return {
         content: [
@@ -90,7 +90,7 @@ app.get('/sse', async (req, res) => {
     });
 
     server.tool(
-      'azure_devops_work_item',
+      'azure_devops_get_work_item',
       'Get a specific work item by ID',
       {
         id: z.number().describe('Work item ID'),
@@ -109,7 +109,7 @@ app.get('/sse', async (req, res) => {
     );
 
     server.tool(
-      'azure_devops_work_items',
+      'azure_devops_get_work_items',
       'Get multiple work items by IDs',
       {
         ids: z.array(z.number()).describe('Array of work item IDs'),
@@ -199,7 +199,7 @@ app.get('/sse', async (req, res) => {
     );
 
     server.tool(
-      'azure_devops_repositories',
+      'azure_devops_get_repositories',
       'Get repositories for a project',
       {
         project: z.string().describe('Project name'),
@@ -218,7 +218,7 @@ app.get('/sse', async (req, res) => {
     );
 
     server.tool(
-      'azure_devops_pull_requests',
+      'azure_devops_get_pull_requests',
       'Get pull requests from a repository',
       {
         repositoryId: z.string().describe('Repository ID'),
@@ -238,7 +238,7 @@ app.get('/sse', async (req, res) => {
     );
 
     server.tool(
-      'azure_devops_pull_request_by_id',
+      'azure_devops_get_pull_request',
       'Get a specific pull request by ID',
       {
         repositoryId: z.string().describe('Repository ID'),
@@ -263,7 +263,7 @@ app.get('/sse', async (req, res) => {
     );
 
     server.tool(
-      'azure_devops_pull_request_threads',
+      'azure_devops_get_pull_request_threads',
       'Get threads from a pull request',
       {
         repositoryId: z.string().describe('Repository ID'),
@@ -289,7 +289,7 @@ app.get('/sse', async (req, res) => {
 
     // New tool for work item attachments
     server.tool(
-      'azure_devops_work_item_attachments',
+      'azure_devops_get_work_item_attachments',
       'Get attachments for a specific work item',
       {
         id: z.number().describe('Work item ID'),
@@ -309,7 +309,7 @@ app.get('/sse', async (req, res) => {
 
     // New tool for work item links
     server.tool(
-      'azure_devops_work_item_links',
+      'azure_devops_get_work_item_links',
       'Get links for a specific work item',
       {
         id: z.number().describe('Work item ID'),
@@ -329,7 +329,7 @@ app.get('/sse', async (req, res) => {
 
     // New tool for linked work items with full details
     server.tool(
-      'azure_devops_linked_work_items',
+      'azure_devops_get_linked_work_items',
       'Get all linked work items with their full details',
       {
         id: z.number().describe('Work item ID'),
@@ -349,7 +349,7 @@ app.get('/sse', async (req, res) => {
 
     // New tool for pull request changes with file contents
     server.tool(
-      'azure_devops_pull_request_changes',
+      'azure_devops_get_pull_request_changes',
       'Get detailed code changes for a pull request',
       {
         repositoryId: z.string().describe('Repository ID'),
@@ -376,7 +376,7 @@ app.get('/sse', async (req, res) => {
 
     // New tool for work item comments
     server.tool(
-      'azure_devops_work_item_comments',
+      'azure_devops_get_work_item_comments',
       'Get comments for a specific work item',
       {
         id: z.number().describe('Work item ID'),
@@ -396,7 +396,7 @@ app.get('/sse', async (req, res) => {
 
     // Main server tools
     const serverTools: Record<string, McpTool> = {
-      azure_devops_pull_request_file_content: {
+      azure_devops_get_pull_request_file_content: {
         description:
           'Get the content of a specific file in a pull request. By default returns the complete file as plain text. Set returnPlainText=false to get content in chunks with metadata. Has a 5-minute timeout for large files.',
         parameters: {
@@ -502,7 +502,7 @@ app.get('/sse', async (req, res) => {
         },
       },
 
-      azure_devops_branch_file_content: {
+      azure_devops_get_branch_file_content: {
         description:
           'Get the content of a file directly from a branch. By default returns the complete file as plain text. Set returnPlainText=false to get content in chunks with metadata. Has a 5-minute timeout for large files.',
         parameters: {
