@@ -233,3 +233,39 @@ export interface WorkItemCommentsResponse {
   comments: WorkItemComment[];
   error?: string; // Optional error message if something went wrong
 }
+
+/** JSON Patch operation for Azure DevOps work item create/update */
+export interface WorkItemJsonPatchOperation {
+  op: 'add' | 'replace' | 'remove';
+  path: string;
+  value?: unknown;
+}
+
+/** Request payload for creating a work item */
+export interface WorkItemCreateRequest {
+  project?: string;
+  type: string;
+  title: string;
+  description?: string;
+  state?: string;
+  assignedTo?: string;
+  areaPath?: string;
+  iterationPath?: string;
+  tags?: string;
+  parentId?: number;
+  fields?: Record<string, unknown>;
+}
+
+/** Request payload for updating a work item */
+export interface WorkItemUpdateRequest {
+  id: number;
+  project?: string;
+  title?: string;
+  description?: string;
+  state?: string;
+  assignedTo?: string;
+  areaPath?: string;
+  iterationPath?: string;
+  tags?: string;
+  fields?: Record<string, unknown>;
+}

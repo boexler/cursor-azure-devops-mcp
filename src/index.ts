@@ -268,6 +268,99 @@ server.tool(
   }
 );
 
+const workItemFieldsSchema = {
+  title: z.string().optional().describe('Work item title (System.Title)'),
+  description: z.string().optional().describe('Work item description in HTML (System.Description)'),
+  state: z.string().optional().describe('Work item state (System.State)'),
+  assignedTo: z.string().optional().describe('Assignee display name or email (System.AssignedTo)'),
+  areaPath: z.string().optional().describe('Area path (System.AreaPath)'),
+  iterationPath: z.string().optional().describe('Iteration path (System.IterationPath)'),
+  tags: z.string().optional().describe('Semicolon-separated tags (System.Tags)'),
+  fields: z
+    .record(z.unknown())
+    .optional()
+    .describe('Additional custom fields using full Azure DevOps field reference names'),
+};
+
+server.tool(
+  'azure_devops_create_work_item',
+  'Create a new work item in Azure DevOps. Supports common fields, custom fields, and optional parent linking.',
+  {
+    type: z
+      .string()
+      .describe('Work item type to create, e.g. Task, Bug, User Story, Feature, Epic'),
+    title: z.string().describe('Title of the work item (System.Title)'),
+    project: z
+      .string()
+      .optional()
+      .describe('Project name. If not provided, uses the default project from configuration.'),
+    description: workItemFieldsSchema.description,
+    state: workItemFieldsSchema.state,
+    assignedTo: workItemFieldsSchema.assignedTo,
+    areaPath: workItemFieldsSchema.areaPath,
+    iterationPath: workItemFieldsSchema.iterationPath,
+    tags: workItemFieldsSchema.tags,
+    parentId: z.number().optional().describe('Optional parent work item ID to link as a child'),
+    fields: workItemFieldsSchema.fields,
+  },
+  async params => {
+    try {
+      const result = await azureDevOpsService.createWorkItem(params);
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+  }
+);
+
+server.tool(
+  'azure_devops_update_work_item',
+  'Update an existing work item in Azure DevOps. Only provided fields are changed.',
+  {
+    id: z.number().describe('The ID of the work item to update'),
+    project: z
+      .string()
+      .optional()
+      .describe('Project name. Optional but recommended for ADO routing.'),
+    title: workItemFieldsSchema.title,
+    description: workItemFieldsSchema.description,
+    state: workItemFieldsSchema.state,
+    assignedTo: workItemFieldsSchema.assignedTo,
+    areaPath: workItemFieldsSchema.areaPath,
+    iterationPath: workItemFieldsSchema.iterationPath,
+    tags: workItemFieldsSchema.tags,
+    fields: workItemFieldsSchema.fields,
+  },
+  async params => {
+    try {
+      const result = await azureDevOpsService.updateWorkItem(params);
+      return {
+        content: [{ type: 'text', text: safeResponse(result) }],
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+  }
+);
+
 server.tool(
   'azure_devops_repositories',
   'List all Git repositories in an Azure DevOps project. Returns repository details including ID, name, project info, default branch, size, and URLs. Supports both project-specific and organization-wide repository listing. Results are automatically truncated if they exceed size limits.',
@@ -965,6 +1058,8 @@ async function main() {
     console.error('- azure_devops_projects: List all projects');
     console.error('- azure_devops_work_item: Get a work item by ID');
     console.error('- azure_devops_work_items: Get multiple work items by IDs');
+    console.error('- azure_devops_create_work_item: Create a new work item');
+    console.error('- azure_devops_update_work_item: Update an existing work item');
     console.error('- azure_devops_repositories: List all repositories');
     console.error('- azure_devops_pull_requests: List all pull requests for a repository');
     console.error('- azure_devops_pull_request_by_id: Get a pull request by ID');

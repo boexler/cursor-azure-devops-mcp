@@ -13,6 +13,8 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 - Get Azure DevOps projects
 - Retrieve work items by ID
 - Fetch multiple work items
+- Create work items (Task, Bug, User Story, etc.)
+- Update work items (title, state, assignee, and custom fields)
 - List repositories in a project
 - Get pull requests for a repository
 - View pull request details and threads
@@ -273,6 +275,8 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_projects` | Get all projects | None |
 | `azure_devops_work_item` | Get a specific work item | `id` (number) |
 | `azure_devops_work_items` | Get multiple work items | `ids` (array of numbers) |
+| `azure_devops_create_work_item` | Create a new work item | `type` (string), `title` (string), optional: `project`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `parentId`, `fields` |
+| `azure_devops_update_work_item` | Update an existing work item | `id` (number), optional: `project`, `title`, `description`, `state`, `assignedTo`, `areaPath`, `iterationPath`, `tags`, `fields` |
 | `azure_devops_repositories` | Get repositories for a project | `project` (string) |
 | `azure_devops_pull_requests` | Get pull requests from a repository | `repositoryId` (string), `project` (string) |
 | `azure_devops_pull_request_by_id` | Get a specific pull request | `repositoryId` (string), `pullRequestId` (number), `project` (string) |
@@ -288,6 +292,41 @@ registerTools(server, azureDevOpsService);
 | `azure_devops_test_suites` | List all test suites for a test plan | `project` (string), `testPlanId` (number) |
 | `azure_devops_test_suite` | Get a test suite by ID | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
 | `azure_devops_test_cases` | List all test cases for a test suite | `project` (string), `testPlanId` (number), `testSuiteId` (number) |
+
+> **Note:** Creating and updating work items requires a Personal Access Token with **Work Items (read & write)** scope.
+
+### Work Item Management
+
+The work item write tools accept friendly field names and map them to Azure DevOps field references internally.
+
+#### Example Usage:
+
+**Create a task:**
+```json
+{
+  "type": "Task",
+  "title": "Implement login validation",
+  "description": "<p>Add client-side and server-side validation.</p>",
+  "assignedTo": "user@example.com"
+}
+```
+
+**Create a child task linked to a parent:**
+```json
+{
+  "type": "Task",
+  "title": "Sub-task from MCP",
+  "parentId": 12345
+}
+```
+
+**Update work item state:**
+```json
+{
+  "id": 12346,
+  "state": "Active"
+}
+```
 
 ### Test Management Tools
 

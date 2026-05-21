@@ -128,6 +128,77 @@ app.get('/sse', async (req, res) => {
     );
 
     server.tool(
+      'azure_devops_create_work_item',
+      'Create a new work item in Azure DevOps',
+      {
+        type: z.string().describe('Work item type, e.g. Task, Bug, User Story'),
+        title: z.string().describe('Work item title'),
+        project: z.string().optional().describe('Project name'),
+        description: z.string().optional().describe('Work item description (HTML)'),
+        state: z.string().optional().describe('Work item state'),
+        assignedTo: z.string().optional().describe('Assignee display name or email'),
+        areaPath: z.string().optional().describe('Area path'),
+        iterationPath: z.string().optional().describe('Iteration path'),
+        tags: z.string().optional().describe('Semicolon-separated tags'),
+        parentId: z.number().optional().describe('Parent work item ID'),
+        fields: z.record(z.unknown()).optional().describe('Additional custom fields'),
+      },
+      async params => {
+        try {
+          const result = await azureDevOpsService.createWorkItem(params);
+          return {
+            content: [{ type: 'text', text: safeResponse(result) }],
+          };
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    server.tool(
+      'azure_devops_update_work_item',
+      'Update an existing work item in Azure DevOps',
+      {
+        id: z.number().describe('Work item ID'),
+        project: z.string().optional().describe('Project name'),
+        title: z.string().optional().describe('Work item title'),
+        description: z.string().optional().describe('Work item description (HTML)'),
+        state: z.string().optional().describe('Work item state'),
+        assignedTo: z.string().optional().describe('Assignee display name or email'),
+        areaPath: z.string().optional().describe('Area path'),
+        iterationPath: z.string().optional().describe('Iteration path'),
+        tags: z.string().optional().describe('Semicolon-separated tags'),
+        fields: z.record(z.unknown()).optional().describe('Additional custom fields'),
+      },
+      async params => {
+        try {
+          const result = await azureDevOpsService.updateWorkItem(params);
+          return {
+            content: [{ type: 'text', text: safeResponse(result) }],
+          };
+        } catch (error) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    server.tool(
       'azure_devops_repositories',
       'Get repositories for a project',
       {

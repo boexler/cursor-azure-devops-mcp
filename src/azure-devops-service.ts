@@ -16,6 +16,9 @@ import {
   WorkItemRelation,
   WorkItemLink,
   WorkItemCommentsResponse,
+  WorkItemCreateRequest,
+  WorkItemUpdateRequest,
+  WorkItemJsonPatchOperation,
 } from './types.js';
 
 /**
@@ -48,6 +51,7 @@ class AzureDevOpsService {
   private gitClient: any = null;
   private testPlanClient: any = null;
   private defaultProject: string | undefined;
+  private organizationUrl: string | undefined;
 
   constructor(connection?: azdev.WebApi, defaultProject?: string) {
     if (connection) {
@@ -74,6 +78,7 @@ class AzureDevOpsService {
     // Create a connection to Azure DevOps
     const authHandler = azdev.getPersonalAccessTokenHandler(token);
     this.connection = new azdev.WebApi(organizationUrl, authHandler);
+    this.organizationUrl = organizationUrl.replace(/\/$/, '');
 
     // Set default project if not provided in constructor
     if (!this.defaultProject && config.azureDevOps.project) {
@@ -128,6 +133,158 @@ class AzureDevOpsService {
 
     const workItems = await this.workItemClient.getWorkItems(ids);
     return workItems;
+  }
+
+  /**
+   * Build a JSON Patch document from friendly work item field parameters
+   */
+  private buildWorkItemPatchDocument(
+    params: {
+      title?: string;
+      description?: string;
+      state?: string;
+      assignedTo?: string;
+      areaPath?: string;
+      iterationPath?: string;
+      tags?: string;
+      parentId?: number;
+      fields?: Record<string, unknown>;
+    },
+    operation: 'add' | 'replace'
+  ): WorkItemJsonPatchOperation[] {
+    const document: WorkItemJsonPatchOperation[] = [];
+    const fieldMappings: Array<[keyof typeof params, string]> = [
+      ['title', 'System.Title'],
+      ['description', 'System.Description'],
+      ['state', 'System.State'],
+      ['assignedTo', 'System.AssignedTo'],
+      ['areaPath', 'System.AreaPath'],
+      ['iterationPath', 'System.IterationPath'],
+      ['tags', 'System.Tags'],
+    ];
+
+    for (const [paramKey, fieldRef] of fieldMappings) {
+      const value = params[paramKey];
+      if (value !== undefined && value !== null && value !== '') {
+        document.push({
+          op: operation,
+          path: `/fields/${fieldRef}`,
+          value,
+        });
+      }
+    }
+
+    if (params.fields) {
+      for (const [fieldRef, value] of Object.entries(params.fields)) {
+        if (value !== undefined) {
+          document.push({
+            op: operation,
+            path: `/fields/${fieldRef}`,
+            value,
+          });
+        }
+      }
+    }
+
+    if (operation === 'add' && params.parentId !== undefined) {
+      if (!this.organizationUrl) {
+        throw new Error('Organization URL is not initialized');
+      }
+
+      document.push({
+        op: 'add',
+        path: '/relations/-',
+        value: {
+          rel: 'System.LinkTypes.Hierarchy-Reverse',
+          url: `${this.organizationUrl}/_apis/wit/workitems/${params.parentId}`,
+        },
+      });
+    }
+
+    return document;
+  }
+
+  /**
+   * Create a new work item in Azure DevOps
+   */
+  async createWorkItem(params: WorkItemCreateRequest): Promise<WorkItem> {
+    await this.initialize();
+
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    const projectName = params.project || this.defaultProject;
+    if (!projectName) {
+      throw new Error('Project name is required');
+    }
+
+    const document = this.buildWorkItemPatchDocument(params, 'add');
+    if (document.length === 0) {
+      throw new Error('At least one field is required to create a work item');
+    }
+
+    try {
+      const workItem = await this.workItemClient.createWorkItem(
+        null,
+        document,
+        projectName,
+        params.type
+      );
+
+      if (!workItem) {
+        throw new Error(
+          'Azure DevOps returned no work item. Verify project, work item type, field values, and PAT permissions (Work Items read & write).'
+        );
+      }
+
+      return workItem;
+    } catch (error) {
+      console.error('Error creating work item:', error);
+      throw new Error(
+        `Failed to create work item: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Update an existing work item in Azure DevOps
+   */
+  async updateWorkItem(params: WorkItemUpdateRequest): Promise<WorkItem> {
+    await this.initialize();
+
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    const projectName = params.project || this.defaultProject;
+    const document = this.buildWorkItemPatchDocument(params, 'replace');
+
+    if (document.length === 0) {
+      throw new Error('At least one field must be provided to update a work item');
+    }
+
+    try {
+      const workItem = await this.workItemClient.updateWorkItem(
+        null,
+        document,
+        params.id,
+        projectName
+      );
+
+      if (!workItem) {
+        throw new Error(
+          `Azure DevOps returned no work item for ID ${params.id}. Verify the ID, field values, and PAT permissions (Work Items read & write).`
+        );
+      }
+
+      return workItem;
+    } catch (error) {
+      console.error(`Error updating work item ${params.id}:`, error);
+      throw new Error(
+        `Failed to update work item: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   /**
