@@ -15,7 +15,7 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
 - Fetch multiple work items
 - Create work items (Task, Bug, User Story, etc.)
 - Update work items (title, state, assignee, and custom fields)
-- Add and remove work item links (Related, Parent, Child, Predecessor, Successor)
+- Add and remove work item links (Related, Parent, Child, Predecessor, Successor) and external hyperlinks (e.g. GitLab merge requests)
 - List repositories in a project
 - Get pull requests for a repository
 - View pull request details and threads
@@ -39,6 +39,19 @@ A Model Context Protocol (MCP) server for integrating Azure DevOps with Cursor I
   - Proper error handling for missing project information
 
 ## Changelog
+
+### Version 1.4.0
+
+#### Added
+- External hyperlink support in `azure_devops_get_work_item`, `azure_devops_get_work_item_links`, `azure_devops_add_work_item_links`, and `azure_devops_remove_work_item_links`
+- Normalized relation output with `relations`, `workItemLinks`, and `hyperlinks` arrays
+- Unit tests for relation normalization and hyperlink patch logic (Vitest)
+
+#### Changed (Breaking)
+- `azure_devops_get_work_item_links` now returns a normalized `WorkItemRelationsSummary` instead of a grouped object keyed by ADO relation type
+
+#### Fixed
+- External hyperlinks are no longer returned by `azure_devops_get_work_item_attachments`
 
 ### Version 1.3.0
 

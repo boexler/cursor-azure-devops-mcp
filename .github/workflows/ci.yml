@@ -27,6 +27,9 @@ jobs:
       
     - name: Run linting and formatting checks
       run: npm run check
+
+    - name: Run unit tests
+      run: npm run test
       
     - name: Run security check
       run: npm run security-check

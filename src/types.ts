@@ -30,6 +30,31 @@ export interface WorkItemRelation {
   attributes?: Record<string, any>;
 }
 
+/** Normalized relation type for MCP responses */
+export type WorkItemRelationKind = 'workItem' | 'hyperlink' | 'other';
+
+/** Normalized work item relation returned by read tools */
+export interface NormalizedWorkItemRelation {
+  type: WorkItemRelationKind;
+  rel: string;
+  url: string;
+  targetId?: number;
+  linkType?: string;
+  attributes?: Record<string, unknown>;
+}
+
+/** Summary of all relations on a work item */
+export interface WorkItemRelationsSummary {
+  relations: NormalizedWorkItemRelation[];
+  workItemLinks: NormalizedWorkItemRelation[];
+  hyperlinks: NormalizedWorkItemRelation[];
+}
+
+/** Work item with normalized relation summary */
+export interface WorkItemWithRelations
+  extends Omit<WorkItem, 'relations'>,
+    WorkItemRelationsSummary {}
+
 // Azure DevOps Work Item Link (Extended from WorkItemRelation)
 export interface WorkItemLink extends WorkItemRelation {
   targetId: number; // The ID of the target work item
@@ -241,11 +266,22 @@ export interface WorkItemJsonPatchOperation {
   value?: unknown;
 }
 
-/** Input for linking work items */
-export interface WorkItemLinkInput {
+/** Input for linking to another work item */
+export interface WorkItemLinkWorkItemInput {
+  kind?: 'workItem';
   targetId: number;
   linkType: string;
 }
+
+/** Input for adding an external hyperlink */
+export interface WorkItemLinkHyperlinkInput {
+  kind: 'hyperlink';
+  url: string;
+  comment?: string;
+}
+
+/** Discriminated union for work item links and external hyperlinks */
+export type WorkItemLinkInput = WorkItemLinkWorkItemInput | WorkItemLinkHyperlinkInput;
 
 /** Request payload for adding links to a work item */
 export interface WorkItemAddLinksRequest {

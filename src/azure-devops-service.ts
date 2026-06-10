@@ -13,25 +13,26 @@ import {
   PullRequestCommentRequest,
   PullRequestCommentResponse,
   PullRequestFileContent,
-  WorkItemRelation,
-  WorkItemLink,
   WorkItemCommentsResponse,
   WorkItemCreateRequest,
   WorkItemUpdateRequest,
   WorkItemJsonPatchOperation,
+  WorkItemLinkHyperlinkInput,
   WorkItemLinkInput,
   WorkItemAddLinksRequest,
   WorkItemRemoveLinksRequest,
+  WorkItemWithRelations,
+  WorkItemRelationsSummary,
+  WorkItemLinkWorkItemInput,
 } from './types.js';
-
-/** Maps friendly link type names to Azure DevOps relation reference names */
-const LINK_TYPE_MAP: Record<string, string> = {
-  Related: 'System.LinkTypes.Related',
-  Parent: 'System.LinkTypes.Hierarchy-Reverse',
-  Child: 'System.LinkTypes.Hierarchy-Forward',
-  Predecessor: 'System.LinkTypes.Dependency-Reverse',
-  Successor: 'System.LinkTypes.Dependency-Forward',
-};
+import {
+  assertWorkItemLinksOnly,
+  buildLinkAddPatchValue,
+  buildRelationsSummary,
+  findRelationIndexForRemoval,
+  hasDuplicateHyperlink,
+  inferLinkKind,
+} from './relation-utils.js';
 
 /**
  * Helper function to safely stringify objects with circular references
@@ -120,16 +121,56 @@ class AzureDevOpsService {
   }
 
   /**
-   * Get a specific work item by ID
+   * Get a specific work item by ID with normalized relation summary
    */
-  async getWorkItem(id: number): Promise<WorkItem> {
+  async getWorkItem(id: number): Promise<WorkItemWithRelations> {
     await this.initialize();
 
     if (!this.workItemClient) {
       throw new Error('Work item client not initialized');
     }
 
-    const workItem = await this.workItemClient.getWorkItem(id);
+    const workItem = await this.workItemClient.getWorkItem(
+      id,
+      undefined,
+      undefined,
+      4 // WorkItemExpand.Relations
+    );
+
+    return this.enrichWorkItemWithRelations(workItem);
+  }
+
+  /**
+   * Attach normalized relation summary fields to a work item response
+   */
+  private enrichWorkItemWithRelations(workItem: WorkItem): WorkItemWithRelations {
+    const summary = buildRelationsSummary(workItem.relations);
+
+    return {
+      ...workItem,
+      ...summary,
+    };
+  }
+
+  /**
+   * Fetch a work item with relations expanded
+   */
+  private async getWorkItemWithRelations(workItemId: number): Promise<WorkItem> {
+    if (!this.workItemClient) {
+      throw new Error('Work item client not initialized');
+    }
+
+    const workItem = await this.workItemClient.getWorkItem(
+      workItemId,
+      undefined,
+      undefined,
+      4 // WorkItemExpand.Relations
+    );
+
+    if (!workItem) {
+      throw new Error(`Work item ${workItemId} not found`);
+    }
+
     return workItem;
   }
 
@@ -148,39 +189,37 @@ class AzureDevOpsService {
   }
 
   /**
-   * Resolve a friendly or full Azure DevOps link type to a relation reference name
+   * Build JSON Patch operations to add work item links or external hyperlinks
    */
-  private resolveLinkType(linkType: string): string {
-    if (linkType.startsWith('System.LinkTypes.')) {
-      return linkType;
-    }
-
-    const resolved = LINK_TYPE_MAP[linkType];
-    if (!resolved) {
-      throw new Error(
-        `Unknown link type "${linkType}". Supported values: Related, Parent, Child, Predecessor, Successor, or a full System.LinkTypes.* reference.`
-      );
-    }
-
-    return resolved;
-  }
-
-  /**
-   * Build JSON Patch operations to add work item links
-   */
-  private buildWorkItemLinkPatches(links: WorkItemLinkInput[]): WorkItemJsonPatchOperation[] {
+  private buildLinkAddPatches(links: WorkItemLinkInput[]): WorkItemJsonPatchOperation[] {
     if (!this.organizationUrl) {
       throw new Error('Organization URL is not initialized');
     }
 
+    const organizationUrl = this.organizationUrl;
+
     return links.map(link => ({
-      op: 'add',
+      op: 'add' as const,
       path: '/relations/-',
-      value: {
-        rel: this.resolveLinkType(link.linkType),
-        url: `${this.organizationUrl}/_apis/wit/workitems/${link.targetId}`,
-      },
+      value: buildLinkAddPatchValue(link, organizationUrl),
     }));
+  }
+
+  /**
+   * Ensure hyperlink URLs are not already present on the work item
+   */
+  private assertNoDuplicateHyperlinks(workItem: WorkItem, links: WorkItemLinkInput[]): void {
+    for (const link of links) {
+      if (inferLinkKind(link) !== 'hyperlink') {
+        continue;
+      }
+
+      const hyperlinkLink = link as WorkItemLinkHyperlinkInput;
+
+      if (hasDuplicateHyperlink(workItem.relations, hyperlinkLink.url)) {
+        throw new Error(`Hyperlink already exists on work item: ${hyperlinkLink.url}`);
+      }
+    }
   }
 
   /**
@@ -200,52 +239,31 @@ class AzureDevOpsService {
   }
 
   /**
-   * Extract the target work item ID from a relation URL
+   * Build JSON Patch operations to remove work item links or external hyperlinks
    */
-  private extractWorkItemIdFromRelationUrl(url: string): number | null {
-    const match = url.match(/\/workitems\/(\d+)(?:\?.*)?$/i);
-    return match ? parseInt(match[1], 10) : null;
-  }
-
-  /**
-   * Build JSON Patch operations to remove work item links by target ID and link type
-   */
-  private async buildWorkItemLinkRemovePatches(
+  private async buildLinkRemovePatches(
     workItemId: number,
     links: WorkItemLinkInput[]
   ): Promise<WorkItemJsonPatchOperation[]> {
-    if (!this.workItemClient) {
-      throw new Error('Work item client not initialized');
-    }
+    const workItem = await this.getWorkItemWithRelations(workItemId);
 
-    const workItem = await this.workItemClient.getWorkItem(
-      workItemId,
-      undefined,
-      undefined,
-      4 // WorkItemExpand.Relations
-    );
-
-    if (!workItem?.relations?.length) {
+    if (!workItem.relations?.length) {
       throw new Error(`Work item ${workItemId} has no relations to remove`);
     }
 
     const indicesToRemove: number[] = [];
 
     for (const link of links) {
-      const rel = this.resolveLinkType(link.linkType);
-      const index = workItem.relations.findIndex((relation: WorkItemRelation) => {
-        if (relation.rel !== rel) {
-          return false;
-        }
-
-        const targetId = this.extractWorkItemIdFromRelationUrl(relation.url);
-        return targetId === link.targetId;
-      });
+      const index = findRelationIndexForRemoval(workItem.relations, link);
 
       if (index === -1) {
-        throw new Error(
-          `Link not found on work item ${workItemId}: ${link.linkType} -> ${link.targetId}`
-        );
+        const kind = inferLinkKind(link);
+        const message =
+          kind === 'hyperlink'
+            ? `Hyperlink not found on work item ${workItemId}: ${(link as WorkItemLinkHyperlinkInput).url}`
+            : `Link not found on work item ${workItemId}: ${(link as WorkItemLinkWorkItemInput).linkType} -> ${(link as WorkItemLinkWorkItemInput).targetId}`;
+
+        throw new Error(message);
       }
 
       indicesToRemove.push(index);
@@ -338,8 +356,9 @@ class AzureDevOpsService {
 
     if (operation === 'add') {
       const links = this.collectWorkItemLinks(params);
+      assertWorkItemLinksOnly(links);
       if (links.length > 0) {
-        document.push(...this.buildWorkItemLinkPatches(links));
+        document.push(...this.buildLinkAddPatches(links));
       }
     }
 
@@ -400,9 +419,10 @@ class AzureDevOpsService {
     }
 
     const projectName = params.project || this.defaultProject;
+    assertWorkItemLinksOnly(params.links);
     const document = [
       ...this.buildWorkItemPatchDocument(params, 'replace'),
-      ...(params.links?.length ? this.buildWorkItemLinkPatches(params.links) : []),
+      ...(params.links?.length ? this.buildLinkAddPatches(params.links) : []),
     ];
 
     if (document.length === 0) {
@@ -430,7 +450,9 @@ class AzureDevOpsService {
     }
 
     try {
-      const document = this.buildWorkItemLinkPatches(params.links);
+      const workItem = await this.getWorkItemWithRelations(params.id);
+      this.assertNoDuplicateHyperlinks(workItem, params.links);
+      const document = this.buildLinkAddPatches(params.links);
       return await this.applyWorkItemPatch(params.id, document, params.project);
     } catch (error) {
       console.error(`Error adding links to work item ${params.id}:`, error);
@@ -451,7 +473,7 @@ class AzureDevOpsService {
     }
 
     try {
-      const document = await this.buildWorkItemLinkRemovePatches(params.id, params.links);
+      const document = await this.buildLinkRemovePatches(params.id, params.links);
       return await this.applyWorkItemPatch(params.id, document, params.project);
     } catch (error) {
       console.error(`Error removing links from work item ${params.id}:`, error);
@@ -621,9 +643,9 @@ class AzureDevOpsService {
       return [];
     }
 
-    // Filter for attachment relations
+    // Filter for attachment relations only (hyperlinks are managed via link tools)
     const attachmentRelations = workItem.relations.filter(
-      (relation: any) => relation.rel === 'AttachedFile' || relation.rel === 'Hyperlink'
+      (relation: any) => relation.rel === 'AttachedFile'
     );
 
     // Map relations to attachment objects
@@ -729,67 +751,15 @@ class AzureDevOpsService {
   }
 
   /**
-   * Get all links associated with a work item (parent, child, related, etc.)
+   * Get all relations associated with a work item in normalized form
    * @param workItemId The ID of the work item
-   * @returns Object with work item links grouped by relationship type
+   * @returns Normalized relations summary including work item links and hyperlinks
    */
-  async getWorkItemLinks(workItemId: number): Promise<Record<string, WorkItemLink[]>> {
+  async getWorkItemLinks(workItemId: number): Promise<WorkItemRelationsSummary> {
     await this.initialize();
 
-    if (!this.workItemClient) {
-      throw new Error('Work item client not initialized');
-    }
-
-    // Get work item with relations
-    const workItem = await this.workItemClient.getWorkItem(
-      workItemId,
-      undefined,
-      undefined,
-      4 // 4 = WorkItemExpand.Relations in the SDK
-    );
-
-    if (!workItem || !workItem.relations) {
-      return {};
-    }
-
-    // Filter for work item link relations (exclude attachments and hyperlinks)
-    const linkRelations = workItem.relations.filter(
-      (relation: any) =>
-        relation.rel.includes('Link') &&
-        relation.rel !== 'AttachedFile' &&
-        relation.rel !== 'Hyperlink'
-    );
-
-    // Group relations by relationship type
-    const groupedRelations: Record<string, WorkItemLink[]> = {};
-
-    linkRelations.forEach((relation: any) => {
-      const relType = relation.rel;
-
-      // Extract work item ID from URL
-      // URL format is typically like: https://dev.azure.com/{org}/{project}/_apis/wit/workItems/{id}
-      let targetId = 0;
-      try {
-        const urlParts = relation.url.split('/');
-        targetId = parseInt(urlParts[urlParts.length - 1], 10);
-      } catch (error) {
-        console.error('Failed to extract work item ID from URL:', relation.url);
-      }
-
-      if (!groupedRelations[relType]) {
-        groupedRelations[relType] = [];
-      }
-
-      const workItemLink: WorkItemLink = {
-        ...relation,
-        targetId,
-        title: relation.attributes?.name || `Work Item ${targetId}`,
-      };
-
-      groupedRelations[relType].push(workItemLink);
-    });
-
-    return groupedRelations;
+    const workItem = await this.getWorkItemWithRelations(workItemId);
+    return buildRelationsSummary(workItem.relations);
   }
 
   /**
@@ -804,19 +774,11 @@ class AzureDevOpsService {
       throw new Error('Work item client not initialized');
     }
 
-    // First get all links
-    const linkGroups = await this.getWorkItemLinks(workItemId);
+    const { workItemLinks } = await this.getWorkItemLinks(workItemId);
 
-    // Extract all target IDs from all link groups
-    const linkedIds: number[] = [];
-
-    Object.values(linkGroups).forEach(links => {
-      links.forEach(link => {
-        if (link.targetId > 0) {
-          linkedIds.push(link.targetId);
-        }
-      });
-    });
+    const linkedIds = workItemLinks
+      .map(link => link.targetId)
+      .filter((targetId): targetId is number => targetId !== undefined && targetId > 0);
 
     // If no linked items found, return empty array
     if (linkedIds.length === 0) {

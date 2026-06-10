@@ -214,7 +214,7 @@ server.tool(
 
 server.tool(
   'azure_devops_get_work_item',
-  'Get detailed information about a specific work item by ID. Returns work item fields, relations, history, and metadata. Supports all work item types (bugs, tasks, user stories, etc).',
+  'Get detailed information about a specific work item by ID. Returns work item fields, normalized relations (work item links and external hyperlinks), history, and metadata. Supports all work item types (bugs, tasks, user stories, etc).',
   {
     id: z.number().describe('The ID of the work item to retrieve'),
   },
@@ -282,7 +282,17 @@ const workItemFieldsSchema = {
     .describe('Additional custom fields using full Azure DevOps field reference names'),
 };
 
-const workItemLinkSchema = z.object({
+const workItemHyperlinkInputSchema = z.object({
+  kind: z.literal('hyperlink').describe('External hyperlink relation'),
+  url: z.string().describe('External URL (must start with http:// or https://)'),
+  comment: z.string().optional().describe('Optional comment stored on the hyperlink relation'),
+});
+
+const workItemLinkWorkItemInputSchema = z.object({
+  kind: z
+    .literal('workItem')
+    .optional()
+    .describe('Work item link relation (default when targetId is provided)'),
   targetId: z.number().describe('Target work item ID to link to'),
   linkType: z
     .string()
@@ -291,10 +301,15 @@ const workItemLinkSchema = z.object({
     ),
 });
 
+const workItemLinkInputSchema = z.union([
+  workItemHyperlinkInputSchema,
+  workItemLinkWorkItemInputSchema,
+]);
+
 const workItemLinksSchema = z
-  .array(workItemLinkSchema)
+  .array(workItemLinkInputSchema)
   .optional()
-  .describe('Work item links to create or add');
+  .describe('Work item links or external hyperlinks to create or add');
 
 server.tool(
   'azure_devops_create_work_item',
@@ -340,7 +355,7 @@ server.tool(
 
 server.tool(
   'azure_devops_update_work_item',
-  'Update an existing work item in Azure DevOps. Only provided fields are changed; optional links are added.',
+  'Update an existing work item in Azure DevOps. Only provided fields are changed; optional work item links can be added. For link management (including hyperlinks), use add_work_item_links / remove_work_item_links.',
   {
     id: z.number().describe('The ID of the work item to update'),
     project: z
@@ -379,7 +394,7 @@ server.tool(
 
 server.tool(
   'azure_devops_add_work_item_links',
-  'Add one or more links to an existing work item. Supports Related, Parent, Child, Predecessor, and Successor link types.',
+  'Add one or more links to an existing work item. Supports work item links (Related, Parent, Child, Predecessor, Successor) and external hyperlinks (kind: hyperlink with url).',
   {
     id: z.number().describe('The ID of the source work item'),
     project: z
@@ -387,9 +402,11 @@ server.tool(
       .optional()
       .describe('Project name. Optional but recommended for ADO routing.'),
     links: z
-      .array(workItemLinkSchema)
+      .array(workItemLinkInputSchema)
       .min(1)
-      .describe('Links to add, each with targetId and linkType'),
+      .describe(
+        'Links to add. Use targetId + linkType for work item links, or kind: hyperlink with url for external links.'
+      ),
   },
   async params => {
     try {
@@ -413,7 +430,7 @@ server.tool(
 
 server.tool(
   'azure_devops_remove_work_item_links',
-  'Remove one or more links from an existing work item by target ID and link type.',
+  'Remove one or more links from an existing work item. Supports work item links (targetId + linkType) and external hyperlinks (kind: hyperlink with url).',
   {
     id: z.number().describe('The ID of the source work item'),
     project: z
@@ -421,9 +438,11 @@ server.tool(
       .optional()
       .describe('Project name. Optional but recommended for ADO routing.'),
     links: z
-      .array(workItemLinkSchema)
+      .array(workItemLinkInputSchema)
       .min(1)
-      .describe('Links to remove, each with targetId and linkType'),
+      .describe(
+        'Links to remove. Use targetId + linkType for work item links, or kind: hyperlink with url for external links.'
+      ),
   },
   async params => {
     try {
@@ -625,7 +644,7 @@ server.tool(
 // New tool for work item links
 server.tool(
   'azure_devops_get_work_item_links',
-  'Get all links and relationships for a work item. Returns detailed link information including link types, target work items, and relationship attributes. Supports all link types (Parent/Child, Related, Predecessor/Successor, etc). Results include full context of work item relationships.',
+  'Get all relations for a work item in normalized form. Returns work item links, external hyperlinks, and other relations with type, rel, url, targetId, linkType, and attributes.',
   {
     id: z
       .number()

@@ -1,6 +1,6 @@
 {
   "name": "cursor-azure-devops-mcp",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "MCP Server for Cursor IDE-Azure DevOps Integration",
   "main": "build/index.js",
   "type": "module",
@@ -16,6 +16,7 @@
   "scripts": {
     "start": "node build/index.js",
     "dev": "tsc -w",
+    "test": "vitest run",
     "test-connection": "node build/test-connection.js",
     "sse-server": "node build/sse-server.js",
     "build": "npm run format && tsc && node -e \"require('fs').chmodSync('build/index.js', '755') && require('fs').chmodSync('build/sse-server.js', '755')\"",
@@ -58,7 +59,8 @@
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.3",
     "prettier": "^3.5.3",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=18.0.0"

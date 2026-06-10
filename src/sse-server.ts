@@ -14,6 +14,35 @@ import { EventEmitter } from 'events';
 // Extend EventEmitter to allow more listeners
 EventEmitter.defaultMaxListeners = 100;
 
+const workItemHyperlinkInputSchema = z.object({
+  kind: z.literal('hyperlink').describe('External hyperlink relation'),
+  url: z.string().describe('External URL (must start with http:// or https://)'),
+  comment: z.string().optional().describe('Optional comment stored on the hyperlink relation'),
+});
+
+const workItemLinkWorkItemInputSchema = z.object({
+  kind: z
+    .literal('workItem')
+    .optional()
+    .describe('Work item link relation (default when targetId is provided)'),
+  targetId: z.number().describe('Target work item ID to link to'),
+  linkType: z
+    .string()
+    .describe(
+      'Link type: Related, Parent, Child, Predecessor, Successor, or full System.LinkTypes.* reference'
+    ),
+});
+
+const workItemLinkInputSchema = z.union([
+  workItemHyperlinkInputSchema,
+  workItemLinkWorkItemInputSchema,
+]);
+
+const workItemLinksSchema = z
+  .array(workItemLinkInputSchema)
+  .optional()
+  .describe('Work item links or external hyperlinks to create or add');
+
 // Create Express app
 const app = express();
 const PORT = config.server.port;
@@ -91,7 +120,7 @@ app.get('/sse', async (req, res) => {
 
     server.tool(
       'azure_devops_get_work_item',
-      'Get a specific work item by ID',
+      'Get a specific work item by ID with normalized relations including work item links and external hyperlinks',
       {
         id: z.number().describe('Work item ID'),
       },
@@ -141,17 +170,7 @@ app.get('/sse', async (req, res) => {
         iterationPath: z.string().optional().describe('Iteration path'),
         tags: z.string().optional().describe('Semicolon-separated tags'),
         parentId: z.number().optional().describe('Parent work item ID'),
-        links: z
-          .array(
-            z.object({
-              targetId: z.number().describe('Target work item ID'),
-              linkType: z
-                .string()
-                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
-            })
-          )
-          .optional()
-          .describe('Work item links to create'),
+        links: workItemLinksSchema,
         fields: z.record(z.unknown()).optional().describe('Additional custom fields'),
       },
       async params => {
@@ -176,7 +195,7 @@ app.get('/sse', async (req, res) => {
 
     server.tool(
       'azure_devops_update_work_item',
-      'Update an existing work item in Azure DevOps',
+      'Update an existing work item in Azure DevOps. For link management (including hyperlinks), use add_work_item_links / remove_work_item_links.',
       {
         id: z.number().describe('Work item ID'),
         project: z.string().optional().describe('Project name'),
@@ -187,17 +206,7 @@ app.get('/sse', async (req, res) => {
         areaPath: z.string().optional().describe('Area path'),
         iterationPath: z.string().optional().describe('Iteration path'),
         tags: z.string().optional().describe('Semicolon-separated tags'),
-        links: z
-          .array(
-            z.object({
-              targetId: z.number().describe('Target work item ID'),
-              linkType: z
-                .string()
-                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
-            })
-          )
-          .optional()
-          .describe('Work item links to add'),
+        links: workItemLinksSchema,
         fields: z.record(z.unknown()).optional().describe('Additional custom fields'),
       },
       async params => {
@@ -222,21 +231,16 @@ app.get('/sse', async (req, res) => {
 
     server.tool(
       'azure_devops_add_work_item_links',
-      'Add links to an existing work item',
+      'Add work item links or external hyperlinks to an existing work item',
       {
         id: z.number().describe('Source work item ID'),
         project: z.string().optional().describe('Project name'),
         links: z
-          .array(
-            z.object({
-              targetId: z.number().describe('Target work item ID'),
-              linkType: z
-                .string()
-                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
-            })
-          )
+          .array(workItemLinkInputSchema)
           .min(1)
-          .describe('Links to add'),
+          .describe(
+            'Links to add. Use targetId + linkType for work item links, or kind: hyperlink with url for external links.'
+          ),
       },
       async params => {
         try {
@@ -260,21 +264,16 @@ app.get('/sse', async (req, res) => {
 
     server.tool(
       'azure_devops_remove_work_item_links',
-      'Remove links from an existing work item',
+      'Remove work item links or external hyperlinks from an existing work item',
       {
         id: z.number().describe('Source work item ID'),
         project: z.string().optional().describe('Project name'),
         links: z
-          .array(
-            z.object({
-              targetId: z.number().describe('Target work item ID'),
-              linkType: z
-                .string()
-                .describe('Link type: Related, Parent, Child, Predecessor, Successor'),
-            })
-          )
+          .array(workItemLinkInputSchema)
           .min(1)
-          .describe('Links to remove'),
+          .describe(
+            'Links to remove. Use targetId + linkType for work item links, or kind: hyperlink with url for external links.'
+          ),
       },
       async params => {
         try {
@@ -408,7 +407,7 @@ app.get('/sse', async (req, res) => {
     // New tool for work item links
     server.tool(
       'azure_devops_get_work_item_links',
-      'Get links for a specific work item',
+      'Get all relations for a work item in normalized form, including work item links and external hyperlinks',
       {
         id: z.number().describe('Work item ID'),
       },
